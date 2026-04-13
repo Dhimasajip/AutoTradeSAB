@@ -1,6 +1,6 @@
--- Memastikan variabel sinkron dengan loader
-local TARGET_LIST = getgenv().TARGET_LIST
-local FPS_CAP = getgenv().FPS_CAP or 60
+-- Sinkronisasi dengan Loader
+local TARGET_LIST = getgenv().TARGET_LIST or {"Secret Lucky Block"}
+local FPS_CAP = getgenv().FPS_CAP or 12
 local WALK_SPEED = 45
 local HOLD_DURATION = 5.5
 
@@ -12,59 +12,55 @@ local ProximityPromptService = game:GetService("ProximityPromptService")
 local lp = Players.LocalPlayer
 local loopID = 0
 local spawnPos = nil
-local isStealing = false
 
 local function getChar() return lp.Character or lp.CharacterAdded:Wait() end
 local function getHum() return getChar():WaitForChild("Humanoid") end
 local function getHrp() return getChar():WaitForChild("HumanoidRootPart") end
 
--- Fungsi Jalan (Pathfinding)
-local function walkTo(destination, myID)
-    local path = PathfindingService:CreatePath({AgentRadius = 3, AgentHeight = 5, AgentCanJump = true})
-    local success, _ = pcall(function() path:ComputeAsync(getHrp().Position, destination) end)
+-- Fungsi Jalan yang lebih stabil
+local function walkTo(destination)
+    local h = getHum()
+    local r = getHrp()
+    local path = PathfindingService:CreatePath({AgentRadius = 2, AgentHeight = 5, AgentCanJump = true})
     
+    local success, _ = pcall(function() path:ComputeAsync(r.Position, destination) end)
     if success and path.Status == Enum.PathStatus.Success then
-        for _, wp in ipairs(path:GetWaypoints()) do
-            if myID ~= loopID then return end
-            if wp.Action == Enum.PathWaypointAction.Jump then getHum().Jump = true end
-            getHum():MoveTo(wp.Position)
-            getHum().MoveToFinished:Wait(1)
+        local waypoints = path:GetWaypoints()
+        for i = 1, #waypoints do
+            local wp = waypoints[i]
+            if wp.Action == Enum.PathWaypointAction.Jump then h.Jump = true end
+            h:MoveTo(wp.Position)
+            
+            -- Timeout jika karakter tersangkut
+            local timedOut = not h.MoveToFinished:Wait(2)
+            if timedOut then 
+                h.Jump = true
+                r.CFrame = r.CFrame * CFrame.new(0,0,-1) -- Dorong sedikit ke depan
+                break 
+            end
         end
     end
 end
 
--- AUTO STEAL (Deteksi Prompt)
-ProximityPromptService.PromptShown:Connect(function(prompt)
-    if prompt.ActionText == "Steal" then
-        task.wait(0.3)
-        pcall(function()
-            prompt:InputHoldBegin(lp)
-            task.wait(HOLD_DURATION)
-            prompt:InputHoldEnd(lp)
-        end)
-    end
-end)
-
--- AUTO SPEED COIL
+-- 1. AUTO SPEED COIL
 task.spawn(function()
     while true do
         pcall(function()
             local bp = lp:FindFirstChild("Backpack")
-            local hum = getHum()
-            if bp and hum then
+            local h = getHum()
+            if bp and h then
                 for _, tool in ipairs(bp:GetChildren()) do
-                    if string.find(string.lower(tool.Name), "speed") then
-                        hum:EquipTool(tool)
-                        break
+                    if tool:IsA("Tool") and string.find(string.lower(tool.Name), "speed") then
+                        h:EquipTool(tool)
                     end
                 end
             end
         end)
-        task.wait(3)
+        task.wait(2)
     end
 end)
 
--- AUTO JUMP
+-- 2. AUTO JUMP (Loncat-loncat)
 task.spawn(function()
     while true do
         pcall(function()
@@ -73,62 +69,67 @@ task.spawn(function()
                 h.Jump = true
             end
         end)
-        task.wait(0.8)
+        task.wait(0.7)
     end
 end)
 
--- MENCARI TARGET
-local function findTarget()
+-- 3. AUTO STEAL (Deteksi Tombol)
+ProximityPromptService.PromptShown:Connect(function(prompt)
+    if prompt.ActionText == "Steal" or prompt.ObjectText == "Item" then
+        task.wait(0.3)
+        pcall(function()
+            prompt:InputHoldBegin(lp)
+            task.wait(HOLD_DURATION + 0.5)
+            prompt:InputHoldEnd(lp)
+        end)
+    end
+end)
+
+-- 4. FUNGSI MENCARI ITEM
+local function findItem()
     local plots = workspace:FindFirstChild("Plots")
-    if not plots then return end
+    if not plots then return nil end
+    
     for _, name in ipairs(TARGET_LIST) do
         for _, plot in ipairs(plots:GetChildren()) do
-            local obj = plot:FindFirstChild(name, true)
-            if obj and obj:IsA("Model") then
-                return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+            -- Jangan curi dari plot sendiri jika bisa dideteksi (opsional)
+            local item = plot:FindFirstChild(name, true)
+            if item and item:IsA("Model") then
+                return item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")
             end
         end
     end
+    return nil
 end
 
--- LOOP UTAMA
-local function startLoop()
+-- 5. LOOP UTAMA
+local function main()
     loopID += 1
     local myID = loopID
-    task.spawn(function()
-        while myID == loopID do
-            local target = findTarget()
-            if target and not isStealing then
-                -- Pergi ke item
-                walkTo(target.Position, myID)
-                
-                -- Tunggu proses Steal selesai
-                isStealing = true
-                task.wait(HOLD_DURATION + 1)
-                isStealing = false
-                
-                -- Balik ke tempat awal (Spawn)
-                if spawnPos then
-                    walkTo(spawnPos, myID)
-                end
-            end
-            task.wait(1)
-        end
-    end)
-end
-
--- Inisialisasi awal
-task.spawn(function()
-    task.wait(2)
-    spawnPos = getHrp().Position -- Simpan posisi berdiri sekarang sebagai tempat balik
-    getHum().WalkSpeed = WALK_SPEED
-    startLoop()
-end)
-
-lp.CharacterAdded:Connect(function()
-    loopID += 1
+    
+    -- Tunggu karakter siap dan ambil posisi Spawn
     task.wait(2)
     spawnPos = getHrp().Position
     getHum().WalkSpeed = WALK_SPEED
-    startLoop()
-end)
+    
+    while myID == loopID do
+        local target = findItem()
+        if target then
+            -- Pergi ke Item
+            walkTo(target.Position)
+            
+            -- Tunggu proses steal (PromptShown akan menangani sisanya)
+            task.wait(HOLD_DURATION + 1)
+            
+            -- Balik ke Spawn
+            if spawnPos then
+                walkTo(spawnPos)
+            end
+        end
+        task.wait(2) -- Jeda antar pencarian
+    end
+end
+
+-- Jalankan
+task.spawn(main)
+lp.CharacterAdded:Connect(main)
