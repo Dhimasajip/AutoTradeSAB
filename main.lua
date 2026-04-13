@@ -1,5 +1,5 @@
 local task_wait = task.wait
-task_wait(2)
+task_wait(1)
 
 local Players = game:GetService("Players")
 local PathfindingService = game:GetService("PathfindingService")
@@ -11,7 +11,7 @@ local lp = Players.LocalPlayer
 
 -- Mengambil konfigurasi dari getgenv [cite: 1]
 local TARGET_LIST = getgenv().TARGET_LIST or {"Secret Lucky Block"}
-local HOLD_DURATION = getgenv().HOLD_DURATION or 5.5
+local HOLD_DURATION = getgenv().HOLD_DURATION or 2.2
 local WALK_SPEED = getgenv().WALK_SPEED or 45
 local RAY_DISTANCE = 6
 local FPS_CAP = getgenv().FPS_CAP or 60
