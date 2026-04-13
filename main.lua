@@ -9,7 +9,7 @@ local workspace = game:GetService("Workspace")
 
 local lp = Players.LocalPlayer
 
--- ADAPTASI: Mengambil dari getgenv agar bisa diganti lewat loader
+-- Mengambil konfigurasi dari getgenv [cite: 1]
 local TARGET_LIST = getgenv().TARGET_LIST or {"Secret Lucky Block"}
 local HOLD_DURATION = getgenv().HOLD_DURATION or 5.5
 local WALK_SPEED = getgenv().WALK_SPEED or 45
@@ -30,13 +30,16 @@ local function getChar() return lp.Character or lp.CharacterAdded:Wait() end
 local function getHum() return getChar():WaitForChild("Humanoid") end
 local function getHrp() return getChar():WaitForChild("HumanoidRootPart") end
 
+-- Fungsi Kamera dari TRADE V3 [cite: 2, 3]
 local function toggleTopDownCamera(enable)
     local cam = workspace.CurrentCamera
     if not cam then return end
+
     if cameraConnection then 
         cameraConnection:Disconnect()
         cameraConnection = nil
     end
+
     if enable then
         cam.CameraType = Enum.CameraType.Scriptable
         cameraConnection = RunService.RenderStepped:Connect(function()
@@ -99,6 +102,7 @@ local function walkTo(destination, myID)
         if success and path.Status == Enum.PathStatus.Success then
             for _, wp in ipairs(path:GetWaypoints()) do
                 if myID ~= loopID then return end
+                -- Auto Jump saat jalan [cite: 8, 9]
                 if wp.Action == Enum.PathWaypointAction.Jump or isObstacleInFront() then
                     getHum().Jump = true
                 end
@@ -113,6 +117,7 @@ local function walkTo(destination, myID)
     end
 end
 
+-- Menjalankan Kamera saat Prompt muncul 
 ProximityPromptService.PromptShown:Connect(function(prompt)
     if prompt.ActionText ~= "Steal" then return end
     toggleTopDownCamera(true)
@@ -176,6 +181,7 @@ local function startLoop()
     end)
 end
 
+-- Auto Speed Coil 
 task.spawn(function()
     while true do
         local c = lp.Character
@@ -208,6 +214,7 @@ lp.CharacterAdded:Connect(function()
     startLoop()
 end)
 
+-- AUTO JUMP LOOP (Tetap melompat saat idle) 
 task.spawn(function()
     while true do
         if autoJumpEnabled then
